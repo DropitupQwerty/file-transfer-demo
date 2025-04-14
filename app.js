@@ -20,18 +20,47 @@ oauth2Client.setCredentials(existingToken);
 
 const drive = google.drive({ version: 'v3', auth: oauth2Client });
 
+
+
 async function transferFileOwnership(fileId, newOwnerEmail) {
     try {
-
-        await drive.permissions.create({
-            fileId: fileId,
-            requestBody: {
-                type: 'user',
-                role: 'writer',
-                emailAddress: newOwnerEmail
-            },
-            fields: 'id'
+        const permissionList = await drive.permissions.list({
+            fileId,
+            supportsAllDrives: true,
+            fields: "*",
         });
+
+        const permission = permissionList.data.permissions.find(
+            ({ emailAddress }) => emailAddress == newOwnerEmail
+        );
+
+        if (permission) {
+            throw new Error("User already have permission")
+        }
+
+        const permissionResponse = await drive.permissions.create({
+            fileId: fileId,
+            sendNotificationEmail: true,
+            supportsAllDrives: true,
+            requestBody: {
+                role: "writer",
+                type: "user",
+                emailAddress: newOwnerEmail,
+            },
+        });
+
+        const permissionId = permissionResponse.data.id
+        await drive.permissions.update({
+            fileId,
+            permissionId,
+            supportsAllDrives: true,
+            requestBody: {
+                role: "writer",
+                pendingOwner: true,
+            },
+        });
+
+
     } catch (error) {
         console.error('Error transferring ownership:', error.message);
     }
